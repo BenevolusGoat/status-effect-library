@@ -24,7 +24,7 @@ local function InitMod()
 	---@field Countdown integer
 	---@field Source EntityRef
 	---@field Icon Sprite?
-	---@field DynamicIconPosition boolean?
+	---@field StaticIconPosition boolean?
 	---@field Color Color?
 	---@field CustomData table
 
@@ -35,7 +35,7 @@ local function InitMod()
 
 	---@class StatusConfig
 	---@field Icon Sprite?
-	---@field DynamicIconPosition boolean?
+	---@field StaticIconPosition boolean?
 	---@field Color Color?
 	---@field IgnoreFlags EntityFlag?
 	---@field CustomTargetCheck boolean?
@@ -445,13 +445,10 @@ local function InitFunctions()
 	---@param color? Color #The color the entity is set to while under the status effect
 	---@param ignoreFlags? EntityFlag | integer #Any EntityFlag status effects this status effect should ignore when choosing whether to apply or not
 	---@param customTargetCheck? boolean #Bypass the default check that runs before a status effect is applied
-	---@param dynamicIconPosition? boolean #If your icon should be moved when other status effects are present
-	function StatusEffectLibrary.RegisterStatusEffect(identifier, icon, color, ignoreFlags, customTargetCheck, dynamicIconPosition)
+	---@param staticIconPosition? boolean #If your icon should be moved when other status effects are present
+	function StatusEffectLibrary.RegisterStatusEffect(identifier, icon, color, ignoreFlags, customTargetCheck, staticIconPosition)
 		local statusEffects = StatusEffectLibrary.Utils.ToList(StatusEffectLibrary.StatusFlag)
 		table.sort(statusEffects)
-		if dynamicIconPosition == nil then
-			dynamicIconPosition = true
-		end
 
 		if StatusEffectLibrary.StatusConfig[identifier] then
 			StatusEffectLibrary.Utils.Log(
@@ -464,7 +461,7 @@ local function InitFunctions()
 		end
 		StatusEffectLibrary.StatusConfig[identifier] = {
 			Icon = icon,
-			DynamicIconPosition = dynamicIconPosition,
+			StaticIconPosition = staticIconPosition,
 			Color = color,
 			IgnoreFlags = ignoreFlags,
 			CustomTargetCheck = customTargetCheck
@@ -564,9 +561,9 @@ local function InitFunctions()
 		if statusConfig.Icon
 			and not statusEffectData.Icon
 		then
-			statusEffectData.DynamicIconPosition = statusConfig.DynamicIconPosition
+			statusEffectData.StaticIconPosition = statusConfig.StaticIconPosition
 			statusEffectData.Icon = StatusEffectLibrary.Utils.CopySprite(statusConfig.Icon)
-			if statusConfig.DynamicIconPosition then
+			if not statusConfig.StaticIconPosition then
 				statusEffects.NumIconsActive = statusEffects.NumIconsActive + 1
 			end
 			StatusEffectLibrary.Utils.DebugLog(identifier, "Icon added. Max number of icons is", statusEffects.NumIconsActive)
@@ -601,7 +598,7 @@ local function InitFunctions()
 		)
 		statusEffects.Flags = statusEffects.Flags & ~StatusEffectLibrary.StatusFlag[identifier]
 		statusEffects.NumStatusesActive = statusEffects.NumStatusesActive - 1
-		if statusEffectData.Icon and statusEffectData.DynamicIconPosition then
+		if statusEffectData.Icon and not statusEffectData.StaticIconPosition then
 			statusEffects.NumIconsActive = statusEffects.NumIconsActive - 1
 		end
 		statusEffects.StatusEffectData[identifier] = nil
@@ -765,7 +762,7 @@ local function InitFunctions()
 		for _, statusEffectData in pairs(statusEffects.StatusEffectData) do
 			if statusEffectData.Icon then
 				local dynamicOffset = Vector((-8 * (statusEffects.NumIconsActive - 1)) + (16 * iconIndex), 0) + vanillaOffset
-				if statusEffectData.DynamicIconPosition then
+				if not statusEffectData.StaticIconPosition then
 					statusEffectData.Icon:Render(renderPos + dynamicOffset)
 					iconIndex = iconIndex + 1
 				else
