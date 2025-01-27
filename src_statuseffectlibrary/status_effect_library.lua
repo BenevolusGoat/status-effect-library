@@ -3,7 +3,7 @@ local Mod = SELExample
 local VERSION = 1.01
 local game = Game()
 
-local DEBUG_PRINT = false
+local DEBUG_PRINT = true
 
 local CACHED_CALLBACKS
 local CACHED_STATUS_FLAGS
@@ -24,6 +24,7 @@ local function InitMod()
 	---@field Countdown integer
 	---@field Source EntityRef
 	---@field Icon Sprite?
+	---@field DynamicIconPosition boolean?
 	---@field Color Color?
 	---@field CustomData table
 
@@ -34,6 +35,7 @@ local function InitMod()
 
 	---@class StatusConfig
 	---@field Icon Sprite?
+	---@field DynamicIconPosition boolean?
 	---@field Color Color?
 	---@field IgnoreFlags EntityFlag?
 	---@field CustomTargetCheck boolean?
@@ -443,9 +445,13 @@ local function InitFunctions()
 	---@param color? Color #The color the entity is set to while under the status effect
 	---@param ignoreFlags? EntityFlag | integer #Any EntityFlag status effects this status effect should ignore when choosing whether to apply or not
 	---@param customTargetCheck? boolean #Bypass the default check that runs before a status effect is applied
-	function StatusEffectLibrary.RegisterStatusEffect(identifier, icon, color, ignoreFlags, customTargetCheck)
+	---@param dynamicIconPosition? boolean #If your icon should be moved when other status effects are present
+	function StatusEffectLibrary.RegisterStatusEffect(identifier, icon, color, ignoreFlags, customTargetCheck, dynamicIconPosition)
 		local statusEffects = StatusEffectLibrary.Utils.ToList(StatusEffectLibrary.StatusFlag)
 		table.sort(statusEffects)
+		if dynamicIconPosition == nil then
+			dynamicIconPosition = true
+		end
 
 		if StatusEffectLibrary.StatusConfig[identifier] then
 			StatusEffectLibrary.Utils.Log(
@@ -458,6 +464,7 @@ local function InitFunctions()
 		end
 		StatusEffectLibrary.StatusConfig[identifier] = {
 			Icon = icon,
+			DynamicIconPosition = dynamicIconPosition,
 			Color = color,
 			IgnoreFlags = ignoreFlags,
 			CustomTargetCheck = customTargetCheck
@@ -514,14 +521,14 @@ local function InitFunctions()
 		local statusEffectData = statusEffects.StatusEffectData[identifier]
 		if not statusEffectData then
 			statusEffects.StatusEffectData[identifier] = {
-				Countdown = duration,
+				Countdown = math.floor(duration),
 				Source = source,
 				CustomData = customData
 			}
 			statusEffectData = statusEffects.StatusEffectData[identifier]
 			StatusEffectLibrary.Utils.DebugLog(identifier, "Initialized status update data with duration of", duration)
 		else
-			statusEffectData.Countdown = duration
+			statusEffectData.Countdown = math.floor(duration)
 			StatusEffectLibrary.Utils.DebugLog(identifier, "Status Update data already initialized. Resetting duration to", duration)
 			return true
 		end
@@ -557,8 +564,11 @@ local function InitFunctions()
 		if statusConfig.Icon
 			and not statusEffectData.Icon
 		then
+			statusEffectData.DynamicIconPosition = statusConfig.DynamicIconPosition
 			statusEffectData.Icon = StatusEffectLibrary.Utils.CopySprite(statusConfig.Icon)
-			statusEffects.NumIconsActive = statusEffects.NumIconsActive + 1
+			if statusConfig.DynamicIconPosition then
+				statusEffects.NumIconsActive = statusEffects.NumIconsActive + 1
+			end
 			StatusEffectLibrary.Utils.DebugLog(identifier, "Icon added. Max number of icons is", statusEffects.NumIconsActive)
 		end
 
@@ -591,7 +601,7 @@ local function InitFunctions()
 		)
 		statusEffects.Flags = statusEffects.Flags & ~StatusEffectLibrary.StatusFlag[identifier]
 		statusEffects.NumStatusesActive = statusEffects.NumStatusesActive - 1
-		if statusEffectData.Icon then
+		if statusEffectData.Icon and statusEffectData.DynamicIconPosition then
 			statusEffects.NumIconsActive = statusEffects.NumIconsActive - 1
 		end
 		statusEffects.StatusEffectData[identifier] = nil
@@ -660,7 +670,7 @@ local function InitFunctions()
 	function StatusEffectLibrary:SetStatusEffectCountdown(ent, statusFlag, countdown)
 		local statusEffectData = StatusEffectLibrary:GetStatusEffectData(ent, statusFlag)
 		if not statusEffectData then return end
-		statusEffectData.Countdown = countdown
+		statusEffectData.Countdown = math.floor(countdown)
 	end
 
 	---@param ent Entity
@@ -746,16 +756,21 @@ local function InitFunctions()
 		else
 			renderPos = renderPos - Vector(0, 35)
 		end
+		local vanillaOffset = Vector(0, 0)
 		if StatusEffectLibrary:HasAnyVanillaStatusEffect(ent, true, true) then
-			renderPos = renderPos - Vector(0, 24)
+			vanillaOffset = Vector(0, -24)
 		end
 
-		local iconIndex = 1
+		local iconIndex = 0
 		for _, statusEffectData in pairs(statusEffects.StatusEffectData) do
 			if statusEffectData.Icon then
-				statusEffectData.Icon:Render(Vector((-8 * (statusEffects.NumIconsActive - 1)) + (16 * (iconIndex - 1)), 0) +
-					renderPos)
-				iconIndex = iconIndex + 1
+				local dynamicOffset = Vector((-8 * (statusEffects.NumIconsActive - 1)) + (16 * iconIndex), 0) + vanillaOffset
+				if statusEffectData.DynamicIconPosition then
+					statusEffectData.Icon:Render(renderPos + dynamicOffset)
+					iconIndex = iconIndex + 1
+				else
+					statusEffectData.Icon:Render(renderPos)
+				end
 				if Isaac.GetFrameCount() % 2 == 0
 					and not game:IsPaused()
 				then
@@ -837,7 +852,7 @@ local function InitFunctions()
 	-- Register new callbacks
 	AddCallback(ModCallbacks.MC_POST_NPC_RENDER, StatusEffectLibrary.OnStatusEffectRender)
 	AddCallback(ModCallbacks.MC_POST_PLAYER_RENDER, StatusEffectLibrary.OnStatusEffectRender)
-	AddCallback(ModCallbacks.MC_PRE_NPC_UPDATE, StatusEffectLibrary.OnStatusEffectUpdate)
+	AddPriorityCallback(ModCallbacks.MC_PRE_NPC_UPDATE, CallbackPriority.IMPORTANT, StatusEffectLibrary.OnStatusEffectUpdate)
 	AddCallback(ModCallbacks.MC_POST_PEFFECT_UPDATE, StatusEffectLibrary.OnStatusEffectUpdate)
 	AddPriorityCallback(ModCallbacks.MC_POST_ENTITY_REMOVE, CallbackPriority.LATE, StatusEffectLibrary.OnEntityRemove)
 

@@ -9,7 +9,11 @@ smilyFace:Play("Idle", true)
 
 SEL.RegisterStatusEffect(
 	"SMILY_FACE",
-	smilyFace
+	smilyFace,
+	nil,
+	nil,
+	nil,
+	false
 )
 
 local function happyTime(_, npc)
