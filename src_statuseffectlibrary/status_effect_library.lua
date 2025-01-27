@@ -1,4 +1,4 @@
-local Mod = Epiphany
+local Mod = SELExample
 
 local VERSION = 1
 local game = Game()
