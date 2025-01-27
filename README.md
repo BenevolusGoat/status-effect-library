@@ -3,10 +3,10 @@
 
 ## Features
 - Register completely custom status effects with an identifier, which it turned into both an enum and a bitmask
-- Can render multiple icons from multiple effects at once, unlike vanilla
-- Made for both NPCs and players
+- Can render multiple icons from multiple effects at once. If you have REPENTOGON, it can render directly where other status effects are meant to be displayed on the enemy
+- Primary usage is for enemies, but can be used for players as well
 - Many different customization options for your status effect, per application and/or the effect overall
-- Works in tandem with multiple mods using StatusEffectLibrary, so icons from multiple mods
+- Works in tandem with multiple mods using StatusEffectLibrary, so icons from multiple mods can be rendered side to side
 
 ## Installation
 Setting up the library is simple. If you look at the main code of this repository, you'll see a main.lua that should work as intended. Just to put it within steps though:
