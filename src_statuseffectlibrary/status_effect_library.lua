@@ -1,6 +1,6 @@
 local Mod = SELExample
 
-local VERSION = 1
+local VERSION = 1.01
 local game = Game()
 
 local DEBUG_PRINT = false
@@ -87,7 +87,7 @@ local function InitMod()
 	StatusEffectLibrary.Callbacks.RegisteredCallbacks = game:GetFrameCount() == 0 and CACHED_CALLBACKS or {}
 	StatusEffectLibrary.AddedCallbacks = game:GetFrameCount() == 0 and CACHED_MOD_CALLBACKS or StatusEffectLibrary.AddedCallbacks
 
-	StatusEffectLibrary.Version = VERSION
+	StatusEffectLibrary.EntityData = {}
 
 	return StatusEffectLibrary
 end
@@ -100,7 +100,7 @@ local function InitFunctions()
 		-- Called during NPC_UPDATE if any custom status effects are applied to an enemy or player
 		-- - `self` - StatusEffectLibrary Mod Global
 		-- - `entity` - The affected enemy/player. Will be EntityNPC/EntityPlayer appropriately
-		-- - `statusEffects` - BigFlag of the applied status effects
+		-- - `statusEffects` - BitFlag of the applied status effects
 		--
 		-- An extra argument can be passed to limit the callback to a specific StatusFlag
 		ENTITY_STATUS_EFFECT_UPDATE = "STATUSEFFECTLIBRARY_ENTITY_STATUS_EFFECT_UPDATE",
@@ -108,7 +108,7 @@ local function InitFunctions()
 		-- Called after valid target check, but before a custom status effect is applied to an enemy or player
 		-- - `self` - StatusEffectLibrary Mod Global
 		-- - `entity` - The affected enemy/player. Will be EntityNPC/EntityPlayer appropriately
-		-- - `statusEffect` - BigFlag of the status effect being applied
+		-- - `statusEffect` - BitFlag of the status effect being applied
 		-- - `customData` - Any custom data passed when AddStatusEffect was called
 		--
 		-- An extra argument can be passed to limit the callback to a specific StatusFlag
@@ -118,8 +118,7 @@ local function InitFunctions()
 		-- Called after a custom status effect is applied to an enemy or player
 		-- - `self` - StatusEffectLibrary Mod Global
 		-- - `entity` - The affected enemy/player. Will be EntityNPC/EntityPlayer appropriately
-		-- - `statusEffect` - BigFlag of the status effect being applied
-		-- - `customData` - Any custom data passed when AddStatusEffect was called
+		-- - `statusEffect` - BitFlag of the status effect being applied
 		-- - `statusEffectData` - Data of the status effect being added
 		--
 		-- An extra argument can be passed to limit the callback to a specific StatusFlag
@@ -128,7 +127,7 @@ local function InitFunctions()
 		-- Called before a custom status effect is removed from an enemy or player
 		-- - `self` - StatusEffectLibrary Mod Global
 		-- - `entity` - The affected enemy/player. Will be EntityNPC/EntityPlayer appropriately
-		-- - `statusEffect` - BigFlag of the status effect being applied
+		-- - `statusEffect` - BitFlag of the status effect being applied
 		-- - `statusEffectData` - Data of the status effect being removed
 		--
 		-- An extra argument can be passed to limit the callback to a specific StatusFlag
@@ -137,7 +136,7 @@ local function InitFunctions()
 		-- Called after a custom status effect is removed from an enemy or player
 		-- - `self` - StatusEffectLibrary Mod Global
 		-- - `entity` - The affected enemy/player. Will be EntityNPC/EntityPlayer appropriately
-		-- - `statusEffect` - BigFlag of the status effect being applied
+		-- - `statusEffect` - BitFlag of the status effect being applied
 		-- - `statusEffectData` - Data of the status effect being removed
 		--
 		-- An extra argument can be passed to limit the callback to a specific StatusFlag
@@ -404,10 +403,22 @@ local function InitFunctions()
 	--#region Data Get functions
 
 	---@param ent Entity
-	---@return StatusEffects?
+	---@return StatusEffects
 	function StatusEffectLibrary:GetStatusEffects(ent)
-		local data = ent:GetData()
-		return data.StatusEffectLibrary
+		local ptrHash = GetPtrHash(ent)
+		local data = StatusEffectLibrary.EntityData[ptrHash]
+		if not data then
+			local newData = {
+					Flags = 0,
+					NumStatusesActive = 0,
+					NumIconsActive = 0,
+					StatusEffectData = {}
+				}
+			StatusEffectLibrary.Utils.DebugLog("N/A", "Initialized status effect data")
+			StatusEffectLibrary.EntityData[ptrHash] = newData
+			data = newData
+		end
+		return data
 	end
 
 	---@param ent Entity
@@ -479,9 +490,9 @@ local function InitFunctions()
 			error(string.format("[StatusEffectLibrary] Status effect %s does not exist", statusFlag))
 		end
 		local statusConfig = StatusEffectLibrary.StatusConfig[identifier]
-		if not statusConfig then return end
+		if not statusConfig then return false end
 		if not StatusEffectLibrary:IsValidTarget(ent) and not statusConfig.CustomTargetCheck then
-			return
+			return false
 		end
 
 		customData = customData or {}
@@ -490,21 +501,10 @@ local function InitFunctions()
 			ent, statusFlag, customData
 		)
 		if result ~= nil then
-			return
+			return false
 		end
 
 		local statusEffects = StatusEffectLibrary:GetStatusEffects(ent)
-		if not statusEffects then
-			statusEffects = {
-				Flags = 0,
-				NumStatusesActive = 0,
-				NumIconsActive = 0,
-				StatusEffectData = {}
-			}
-			ent:GetData().StatusEffectLibrary = statusEffects
-			StatusEffectLibrary.Utils.DebugLog(identifier, "Initialized status effect data")
-		end
-
 		local durationMult = StatusEffectLibrary.Utils.GetSecondHandMultiplier()
 		duration = math.floor(duration * durationMult)
 
@@ -523,7 +523,7 @@ local function InitFunctions()
 		else
 			statusEffectData.Countdown = duration
 			StatusEffectLibrary.Utils.DebugLog(identifier, "Status Update data already initialized. Resetting duration to", duration)
-			return
+			return true
 		end
 
 		if not StatusEffectLibrary.BlacklistParentChildDistribution[ent.Type] or not tempBlacklist[GetPtrHash(ent)] then
@@ -568,7 +568,8 @@ local function InitFunctions()
 		end
 
 		StatusEffectLibrary.Callbacks.FireCallback(StatusEffectLibrary.Callbacks.ID.POST_ADD_ENTITY_STATUS_EFFECT,
-		ent, statusFlag, customData, statusEffectData)
+		ent, statusFlag, statusEffectData)
+		return true
 	end
 
 	---@param ent Entity
@@ -579,10 +580,10 @@ local function InitFunctions()
 			error("Status effect" .. statusFlag .. " does not exist")
 		end
 		local statusEffects = StatusEffectLibrary:GetStatusEffects(ent)
-		if not statusEffects then return end
+		if not statusEffects then return false end
 
 		local statusEffectData = StatusEffectLibrary:GetStatusEffectData(ent, statusFlag)
-		if not statusEffectData then return end
+		if not statusEffectData then return false end
 
 		StatusEffectLibrary.Callbacks.FireCallback(
 			StatusEffectLibrary.Callbacks.ID.PRE_REMOVE_ENTITY_STATUS_EFFECT,
@@ -599,6 +600,7 @@ local function InitFunctions()
 			ent, statusFlag, statusEffectData
 		)
 		StatusEffectLibrary.Utils.DebugLog(identifier, "Successfully removed status")
+		return true
 	end
 
 	---@param ent Entity
@@ -613,12 +615,9 @@ local function InitFunctions()
 	function StatusEffectLibrary:ClearStatusEffects(ent)
 		local statusEffects = StatusEffectLibrary:GetStatusEffects(ent)
 		if not statusEffects then return end
-		ent:GetData().StatusEffectLibrary = {
-			Flags = 0,
-			NumStatusesActive = 0,
-			NumIconsActive = 0,
-			StatusEffectData = {}
-		}
+		for _, statusFlag in pairs(StatusEffectLibrary.StatusFlag) do
+			StatusEffectLibrary:RemoveStatusEffect(ent, statusFlag)
+		end
 	end
 
 	--#endregion
@@ -717,7 +716,7 @@ local function InitFunctions()
 	---@param offset Vector
 	function StatusEffectLibrary.OnStatusEffectRender(_, ent, offset)
 		if (REPENTOGON and ent:GetBossStatusEffectCooldown() > 0 or ent:GetData().BossStatusEffectCooldown)
-		and DEBUG_PRINT
+			and DEBUG_PRINT
 		then
 			local num = REPENTOGON and ent:GetBossStatusEffectCooldown() or ent:GetData().BossStatusEffectCooldown
 			local textPos = Isaac.WorldToRenderPosition(ent.Position) + Vector(-50, -50)
@@ -747,7 +746,7 @@ local function InitFunctions()
 		else
 			renderPos = renderPos - Vector(0, 35)
 		end
-		if StatusEffectLibrary:HasAnyVanillaStatusEffect(ent, true) then
+		if StatusEffectLibrary:HasAnyVanillaStatusEffect(ent, true, true) then
 			renderPos = renderPos - Vector(0, 24)
 		end
 
@@ -810,6 +809,12 @@ local function InitFunctions()
 		return result
 	end
 
+	---@param ent Entity
+	function StatusEffectLibrary.OnEntityRemove(_, ent)
+		StatusEffectLibrary:ClearStatusEffects(ent)
+		StatusEffectLibrary.EntityData[GetPtrHash(ent)] = nil
+	end
+
 	-- Unregister previous callbacks
 	for callback, funcs in pairs(StatusEffectLibrary.AddedCallbacks) do
 		for i = 1, #funcs do
@@ -834,6 +839,7 @@ local function InitFunctions()
 	AddCallback(ModCallbacks.MC_POST_PLAYER_RENDER, StatusEffectLibrary.OnStatusEffectRender)
 	AddCallback(ModCallbacks.MC_PRE_NPC_UPDATE, StatusEffectLibrary.OnStatusEffectUpdate)
 	AddCallback(ModCallbacks.MC_POST_PEFFECT_UPDATE, StatusEffectLibrary.OnStatusEffectUpdate)
+	AddCallback(ModCallbacks.MC_POST_ENTITY_REMOVE, StatusEffectLibrary.OnEntityRemove)
 
 	--#endregion
 end
