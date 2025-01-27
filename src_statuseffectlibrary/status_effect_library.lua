@@ -839,7 +839,7 @@ local function InitFunctions()
 	AddCallback(ModCallbacks.MC_POST_PLAYER_RENDER, StatusEffectLibrary.OnStatusEffectRender)
 	AddCallback(ModCallbacks.MC_PRE_NPC_UPDATE, StatusEffectLibrary.OnStatusEffectUpdate)
 	AddCallback(ModCallbacks.MC_POST_PEFFECT_UPDATE, StatusEffectLibrary.OnStatusEffectUpdate)
-	AddCallback(ModCallbacks.MC_POST_ENTITY_REMOVE, StatusEffectLibrary.OnEntityRemove)
+	AddPriorityCallback(ModCallbacks.MC_POST_ENTITY_REMOVE, CallbackPriority.LATE, StatusEffectLibrary.OnEntityRemove)
 
 	--#endregion
 end
