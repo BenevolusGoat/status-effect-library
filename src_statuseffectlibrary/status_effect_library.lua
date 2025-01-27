@@ -3,7 +3,7 @@ local Mod = SELExample
 local VERSION = 1.01
 local game = Game()
 
-local DEBUG_PRINT = true
+local DEBUG_PRINT = false
 
 local CACHED_CALLBACKS
 local CACHED_STATUS_FLAGS
