@@ -405,21 +405,10 @@ local function InitFunctions()
 	--#region Data Get functions
 
 	---@param ent Entity
-	---@return StatusEffects
+	---@return StatusEffects?
 	function StatusEffectLibrary:GetStatusEffects(ent)
 		local ptrHash = GetPtrHash(ent)
 		local data = StatusEffectLibrary.EntityData[ptrHash]
-		if not data then
-			local newData = {
-					Flags = 0,
-					NumStatusesActive = 0,
-					NumIconsActive = 0,
-					StatusEffectData = {}
-				}
-			StatusEffectLibrary.Utils.DebugLog("N/A", "Initialized status effect data")
-			StatusEffectLibrary.EntityData[ptrHash] = newData
-			data = newData
-		end
 		return data
 	end
 
@@ -509,6 +498,17 @@ local function InitFunctions()
 		end
 
 		local statusEffects = StatusEffectLibrary:GetStatusEffects(ent)
+		if not statusEffects then
+			local newData = {
+				Flags = 0,
+				NumStatusesActive = 0,
+				NumIconsActive = 0,
+				StatusEffectData = {}
+			}
+			StatusEffectLibrary.Utils.DebugLog("N/A", "Initialized status effect data")
+			StatusEffectLibrary.EntityData[GetPtrHash(ent)] = newData
+			statusEffects = newData
+		end
 		local durationMult = StatusEffectLibrary.Utils.GetSecondHandMultiplier()
 		duration = math.floor(duration * durationMult)
 
@@ -823,8 +823,10 @@ local function InitFunctions()
 
 	---@param ent Entity
 	function StatusEffectLibrary.OnEntityRemove(_, ent)
-		StatusEffectLibrary:ClearStatusEffects(ent)
-		StatusEffectLibrary.EntityData[GetPtrHash(ent)] = nil
+		if StatusEffectLibrary.EntityData[GetPtrHash(ent)] then
+			StatusEffectLibrary:ClearStatusEffects(ent)
+			StatusEffectLibrary.EntityData[GetPtrHash(ent)] = nil
+		end
 	end
 
 	-- Unregister previous callbacks
