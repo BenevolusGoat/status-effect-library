@@ -2,6 +2,8 @@ local Mod = SELExample
 
 local VERSION = 1.01
 local game = Game()
+local floor = math.floor
+local min = math.min
 
 local DEBUG_PRINT = false
 
@@ -275,7 +277,7 @@ local function InitFunctions()
 		---@param player EntityPlayer
 		for _, player in ipairs(players) do
 			local secondMult = player:ToPlayer():GetTrinketMultiplier(TrinketType.TRINKET_SECOND_HAND)
-			durationMult = math.min(3, durationMult + secondMult)
+			durationMult = min(3, durationMult + secondMult)
 		end
 		return durationMult
 	end
@@ -405,7 +407,7 @@ local function InitFunctions()
 	--#region Data Get functions
 
 	---@param ent Entity
-	---@return StatusEffects?
+	---@return StatusEffects
 	function StatusEffectLibrary:GetStatusEffects(ent)
 		local ptrHash = GetPtrHash(ent)
 		local data = StatusEffectLibrary.EntityData[ptrHash]
@@ -440,7 +442,7 @@ local function InitFunctions()
 		table.sort(statusEffects)
 
 		if StatusEffectLibrary.StatusConfig[identifier] then
-			StatusEffectLibrary.Utils.Log(
+			StatusEffectLibrary.Utils.DebugLog(
 				identifier,
 				"Status effect with this identifier already exists, overwriting..."
 			)
@@ -467,6 +469,14 @@ local function InitFunctions()
 	end
 
 	local tempBlacklist = {}
+
+	local function applyNonLoopingStatus(ent, statusFlag, duration, source, color, customData)
+		if not tempBlacklist[GetPtrHash(ent)] then
+			tempBlacklist[GetPtrHash(ent)] = true
+			StatusEffectLibrary:AddStatusEffect(ent, statusFlag, duration, source, color, StatusEffectLibrary.Utils.DeepCopy(customData))
+			tempBlacklist[GetPtrHash(ent)] = nil
+		end
+	end
 
 	---Add a status effect to the provided ent
 	---
@@ -505,12 +515,12 @@ local function InitFunctions()
 				NumIconsActive = 0,
 				StatusEffectData = {}
 			}
-			StatusEffectLibrary.Utils.DebugLog("N/A", "Initialized status effect data")
+			StatusEffectLibrary.Utils.DebugLog("N/A", "Initialized general status effect data")
 			StatusEffectLibrary.EntityData[GetPtrHash(ent)] = newData
 			statusEffects = newData
 		end
 		local durationMult = StatusEffectLibrary.Utils.GetSecondHandMultiplier()
-		duration = math.floor(duration * durationMult)
+		duration = floor(duration * durationMult)
 
 		statusEffects.Flags = statusEffects.Flags | StatusEffectLibrary.StatusFlag[identifier]
 		statusEffects.NumStatusesActive = statusEffects.NumStatusesActive + 1
@@ -518,34 +528,46 @@ local function InitFunctions()
 		local statusEffectData = statusEffects.StatusEffectData[identifier]
 		if not statusEffectData then
 			statusEffects.StatusEffectData[identifier] = {
-				Countdown = math.floor(duration),
+				Countdown = floor(duration),
 				Source = source,
 				CustomData = customData
 			}
 			statusEffectData = statusEffects.StatusEffectData[identifier]
-			StatusEffectLibrary.Utils.DebugLog(identifier, "Initialized status update data with duration of", duration)
+			StatusEffectLibrary.Utils.DebugLog(identifier, "Initialized status effect data with duration of", duration)
 		else
-			statusEffectData.Countdown = math.floor(duration)
-			StatusEffectLibrary.Utils.DebugLog(identifier, "Status Update data already initialized. Resetting duration to", duration)
+			statusEffectData.Countdown = floor(duration)
+			StatusEffectLibrary.Utils.DebugLog(identifier, "Status effect already present. Resetting duration to", duration)
 			return true
 		end
 
-		if not StatusEffectLibrary.BlacklistParentChildDistribution[ent.Type] or not tempBlacklist[GetPtrHash(ent)] then
+		if not StatusEffectLibrary.BlacklistParentChildDistribution[ent.Type]
+			and ent:ToNPC()
+			and not tempBlacklist[GetPtrHash(ent)]
+			and (ent.Parent or ent.Child)
+		then
 			local parents = {}
 			local children = {}
-			local currentEnt = ent
+			local currentEnt = ent:ToNPC()
+			--Since the entity has already had the status applied to them directly
+			tempBlacklist[GetPtrHash(ent)] = true
+			---@cast currentEnt EntityNPC
 
-			while currentEnt.Parent and not parents[GetPtrHash(currentEnt)] do
+			--Find the head of the chain
+			while currentEnt.ParentNPC and not parents[GetPtrHash(currentEnt)] do
 				parents[GetPtrHash(currentEnt)] = true
-				currentEnt = currentEnt.Parent
+				currentEnt = currentEnt.ParentNPC
 			end
 
-			while currentEnt.Child and not children[GetPtrHash(currentEnt)] do
+			--Apply to rest of chain
+			while currentEnt.ChildNPC and not children[GetPtrHash(currentEnt)] do
 				children[GetPtrHash(currentEnt)] = true
-				tempBlacklist[GetPtrHash(currentEnt)] = true
-				StatusEffectLibrary:AddStatusEffect(currentEnt, statusFlag, duration, source, color, StatusEffectLibrary.Utils.DeepCopy(customData))
-				tempBlacklist[GetPtrHash(currentEnt)] = nil
-				currentEnt = currentEnt.Child
+				applyNonLoopingStatus(currentEnt, statusFlag, duration, source, color, customData)
+				currentEnt = currentEnt.ChildNPC
+			end
+
+			--Apply to end of chain
+			if not currentEnt.ChildNPC and not children[GetPtrHash(currentEnt)] then
+				applyNonLoopingStatus(currentEnt, statusFlag, duration, source, color, customData)
 			end
 		end
 
@@ -667,7 +689,7 @@ local function InitFunctions()
 	function StatusEffectLibrary:SetStatusEffectCountdown(ent, statusFlag, countdown)
 		local statusEffectData = StatusEffectLibrary:GetStatusEffectData(ent, statusFlag)
 		if not statusEffectData then return end
-		statusEffectData.Countdown = math.floor(countdown)
+		statusEffectData.Countdown = floor(countdown)
 	end
 
 	---@param ent Entity
@@ -732,6 +754,7 @@ local function InitFunctions()
 		local statusEffects = StatusEffectLibrary:GetStatusEffects(ent)
 		if game:GetRoom():GetRenderMode() == RenderMode.RENDER_WATER_REFLECT
 			or not statusEffects
+			or ent.Parent
 		then
 			return
 		end
@@ -741,7 +764,7 @@ local function InitFunctions()
 			return
 		end
 		local renderPos = Isaac.WorldToRenderPosition(ent.Position + ent.PositionOffset) + offset
-		if REPENTOGON and not ent:ToPlayer() then
+		if REPENTOGON then
 			local sprite = ent:GetSprite()
 			local nullFrame = sprite:GetNullFrame("OverlayEffect")
 			if not nullFrame or not nullFrame:IsVisible() then
