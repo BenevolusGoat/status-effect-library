@@ -545,18 +545,12 @@ local function InitFunctions()
 			and not tempBlacklist[GetPtrHash(ent)]
 			and (ent.Parent or ent.Child)
 		then
-			local parents = {}
 			local children = {}
-			local currentEnt = ent:ToNPC()
+			---Will return the last parent in a parent/child chain or, if none found, themselves
+			local currentEnt = ent:GetLastParent():ToNPC()
+			---@cast currentEnt EntityNPC
 			--Since the entity has already had the status applied to them directly
 			tempBlacklist[GetPtrHash(ent)] = true
-			---@cast currentEnt EntityNPC
-
-			--Find the head of the chain
-			while currentEnt.ParentNPC and not parents[GetPtrHash(currentEnt)] do
-				parents[GetPtrHash(currentEnt)] = true
-				currentEnt = currentEnt.ParentNPC
-			end
 
 			--Apply to rest of chain
 			while currentEnt.ChildNPC and not children[GetPtrHash(currentEnt)] do
@@ -566,7 +560,10 @@ local function InitFunctions()
 			end
 
 			--Apply to end of chain
-			if not currentEnt.ChildNPC and not children[GetPtrHash(currentEnt)] then
+			if currentEnt.ParentNPC
+				and not currentEnt.ChildNPC
+				and not children[GetPtrHash(currentEnt)]
+			then
 				applyNonLoopingStatus(currentEnt, statusFlag, duration, source, color, customData)
 			end
 		end
