@@ -1,6 +1,6 @@
 local Mod = SELExample
 
-local VERSION = 1.01
+local VERSION = 1.02
 local game = Game()
 local floor = math.floor
 local min = math.min
