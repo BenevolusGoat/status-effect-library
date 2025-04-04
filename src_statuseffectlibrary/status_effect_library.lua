@@ -534,7 +534,7 @@ local function InitFunctions()
 			error(string.format("[StatusEffectLibrary] Status effect %s does not exist", statusFlag))
 		end
 		local statusConfig = StatusEffectLibrary.StatusConfig[identifier]
-		if not statusConfig then print("no config") return false end
+		if not statusConfig then return false end
 		if not StatusEffectLibrary:IsValidTarget(ent) and not statusConfig.CustomTargetCheck then
 			return false
 		end
