@@ -1,0 +1,7 @@
+Status effect icons no longer render for an entity if it's a segment of an open parent-child chain
+Status effects will now only spread to other entities if they are a segment of an open parent-child chain
+Fix the game freezing while attempting to apply a status effect to a closed parent-child chain, causing a loop
+Fix entities passed through PRE/POST_ADD_ENTITY_STATUS_EFFECT when sharing a status effect across segmented enemies being an Entity object rather than an EntityNPC
+Fix status effects being added multiple times while looping through the parent-child chain. Should now only apply once per segment
+Fix status effects not being applied to the last segment in a parent-child chain
+Fix status effect icons not rendering for players with REPENTOGON
