@@ -654,9 +654,12 @@ local function InitFunctions()
 	---@param ent Entity
 	function StatusEffectLibrary:IsValidTarget(ent)
 		if not ent:ToNPC() and not ent:ToPlayer() then
-			return true
+			return false
 		end
-		if ent:HasEntityFlags(EntityFlag.FLAG_NO_STATUS_EFFECTS) or not ent:IsActiveEnemy(false) then
+		if ent:HasEntityFlags(EntityFlag.FLAG_NO_STATUS_EFFECTS)
+			or not ent:IsActiveEnemy(false)
+			or (ent:ToNPC() and not ent:ToNPC().CanShutDoors)
+		then
 			return false
 		end
 		if ent:IsBoss() then
