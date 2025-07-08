@@ -1,6 +1,6 @@
 local Mod = SELExample
 
-local VERSION = 1.1
+local VERSION = 1.11 --1.1.1
 local game = Game()
 local floor = math.floor
 local min = math.min
@@ -140,7 +140,14 @@ local function InitFunctions()
 		-- - `statusEffectData` - Data of the status effect being removed
 		--
 		-- An extra argument can be passed to limit the callback to a specific StatusFlag
-		POST_REMOVE_ENTITY_STATUS_EFFECT = "STATUSEFFECTLIBRARY_POST_REMOVE_ENTITY_STATUS_EFFECT"
+		POST_REMOVE_ENTITY_STATUS_EFFECT = "STATUSEFFECTLIBRARY_POST_REMOVE_ENTITY_STATUS_EFFECT",
+
+		-- Called before the entity renders any custom status effects.
+		-- - `self` - StatusEffectLibrary Mod Global
+		-- - `entity` - The affected enemy/player. Will be EntityNPC/EntityPlayer appropriately
+		--
+		-- By default, will not render statuses if the render is on a water reflection or if they're part of a segmented enemy and not the head. Return `true` to force them to render, or `false` to stop rendering altogether
+		PRE_RENDER_STATUS_EFFECTS = "STATUSEFFECTLIBRARY_PRE_RENDER_STATUS_EFFECTS"
 	}
 
 	for _, v in pairs(StatusEffectLibrary.Callbacks.ID) do
@@ -365,13 +372,13 @@ local function InitFunctions()
 				end
 			end
 		end,
-		[StatusEffectLibrary.Callbacks.ID.POST_ADD_ENTITY_STATUS_EFFECT] = function(callbacks, entity, statusEffect)
+		[StatusEffectLibrary.Callbacks.ID.POST_ADD_ENTITY_STATUS_EFFECT] = function(callbacks, entity, statusEffect, statusEffectData)
 			for i = 1, #callbacks do
 				local limits = callbacks[i].Args
 				local shouldFire = not limits[1] or StatusEffectLibrary.Utils.HasBitFlags(statusEffect, limits[1])
 
 				if shouldFire then
-					callbacks[i].Function(StatusEffectLibrary, entity, statusEffect)
+					callbacks[i].Function(StatusEffectLibrary, entity, statusEffect, statusEffectData)
 				end
 			end
 		end,
@@ -392,6 +399,14 @@ local function InitFunctions()
 
 				if shouldFire then
 					callbacks[i].Function(StatusEffectLibrary, entity, statusEffect, statusEffectData)
+				end
+			end
+		end,
+		[StatusEffectLibrary.Callbacks.ID.PRE_RENDER_STATUS_EFFECTS] = function(callbacks, entity)
+			for i = 1, #callbacks do
+				local result = callbacks[i].Function(StatusEffectLibrary, entity)
+				if result ~= nil then
+					return result
 				end
 			end
 		end,
@@ -627,7 +642,7 @@ local function InitFunctions()
 			end
 		end
 
-		if ent:IsBoss() and not statusConfig.CustomTargetCheck then
+		if ent:IsBoss() and not statusConfig.CustomTargetCheck and ent.Type ~= EntityType.ENTITY_DUMMY then
 			StatusEffectLibrary.Utils.DebugLog(identifier, "Entity is a boss. Starting status effect cooldown.")
 			if REPENTOGON then
 				ent:SetBossStatusEffectCooldown(StatusEffectLibrary.BOSS_STATUS_EFFECT_COOLDOWN)
@@ -715,6 +730,9 @@ local function InitFunctions()
 	function StatusEffectLibrary:IsValidTarget(ent)
 		if not ent:ToNPC() and not ent:ToPlayer() then
 			return false
+		end
+		if ent.Type == EntityType.ENTITY_DUMMY then
+			return true
 		end
 		if ent:HasEntityFlags(EntityFlag.FLAG_NO_STATUS_EFFECTS)
 			or not ent:IsActiveEnemy(false)
@@ -808,13 +826,20 @@ local function InitFunctions()
 			and DEBUG_PRINT
 		then
 			local num = REPENTOGON and ent:GetBossStatusEffectCooldown() or ent:GetData().BossStatusEffectCooldown
-			local textPos = Isaac.WorldToRenderPosition(ent.Position) + Vector(-50, -50)
+			local textPos = Isaac.WorldToScreen(ent.Position) + Vector(-50, -50)
 			Isaac.RenderText("Boss Cooldown: " .. tostring(num), textPos.X, textPos.Y, 1, 1, 1, 1)
 		end
 		local statusEffects = StatusEffectLibrary:GetStatusEffects(ent)
-		if game:GetRoom():GetRenderMode() == RenderMode.RENDER_WATER_REFLECT
-			or not statusEffects
-			or StatusEffectLibrary.Utils.IsOpenSegment(ent)
+		if not statusEffects then
+			return
+		end
+		local renderMode = game:GetRoom():GetRenderMode()
+		local result = StatusEffectLibrary.Callbacks.FireCallback(StatusEffectLibrary.Callbacks.ID.PRE_RENDER_STATUS_EFFECTS, ent)
+		local isReflection = renderMode == RenderMode.RENDER_WATER_REFLECT
+		if result == false
+			or ((isReflection
+			or StatusEffectLibrary.Utils.IsOpenSegment(ent))
+			and not result)
 		then
 			return
 		end
@@ -823,22 +848,24 @@ local function InitFunctions()
 			StatusEffectLibrary:ClearStatusEffects(ent)
 			return
 		end
-		local renderPos = Isaac.WorldToRenderPosition(ent.Position + ent.PositionOffset) + offset
-		if REPENTOGON and not ent:ToPlayer()  then
+		local renderPos = Isaac.WorldToScreen(ent.Position + ent.PositionOffset)
+		if isReflection then
+			renderPos = Isaac.WorldToRenderPosition(ent.Position + ent.PositionOffset) + offset
+		end
+		if REPENTOGON and not ent:ToPlayer() then
 			local sprite = ent:GetSprite()
 			local nullFrame = sprite:GetNullFrame("OverlayEffect")
 			if not nullFrame or not nullFrame:IsVisible() then
 				return
 			end
 			local statusOffset = nullFrame ~= nil and nullFrame:GetPos() or Vector.Zero
-
-			renderPos = renderPos + statusOffset
+			renderPos = renderPos + (isReflection and -statusOffset or statusOffset)
 		else
-			renderPos = renderPos - Vector(0, 35)
+			renderPos = renderPos - (isReflection and Vector(0, -35) or Vector(0, 35))
 		end
 		local vanillaOffset = Vector(0, 0)
 		if StatusEffectLibrary:HasAnyVanillaStatusEffect(ent, true, true) then
-			vanillaOffset = Vector(0, -24)
+			vanillaOffset = isReflection and Vector(0, 24) or Vector(0, -24)
 		end
 
 		local iconIndex = 0
@@ -867,6 +894,7 @@ local function InitFunctions()
 			and StatusEffectLibrary:HasAnyVanillaStatusEffect(npc, false, true)
 			and not REPENTOGON
 			and not data.BossStatusEffectCooldown
+			and npc.Type ~= EntityType.ENTITY_DUMMY
 		then
 			npc:GetData().BossStatusEffectCooldown = StatusEffectLibrary.BOSS_STATUS_EFFECT_COOLDOWN
 		end
