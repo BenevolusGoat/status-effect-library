@@ -1,6 +1,6 @@
 local Mod = SELExample
 
-local VERSION = 1.11 --1.1.1
+local VERSION = 1.12 --1.1.2
 local game = Game()
 local floor = math.floor
 local min = math.min
@@ -735,7 +735,7 @@ local function InitFunctions()
 			return true
 		end
 		if ent:HasEntityFlags(EntityFlag.FLAG_NO_STATUS_EFFECTS)
-			or not ent:IsActiveEnemy(false)
+			or (ent:ToNPC() and not ent:IsActiveEnemy(false))
 			or (ent:ToNPC() and not ent:ToNPC().CanShutDoors)
 		then
 			return false
