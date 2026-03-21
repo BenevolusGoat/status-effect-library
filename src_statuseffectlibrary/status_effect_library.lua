@@ -941,13 +941,6 @@ local function InitFunctions()
 		end
 	end
 
-	-- Unregister previous callbacks
-	for callback, funcs in pairs(StatusEffectLibrary.AddedCallbacks) do
-		for i = 1, #funcs do
-			StatusEffectLibrary:RemoveCallback(callback, funcs[i])
-		end
-	end
-
 	local function AddPriorityCallback(callback, priority, func, arg)
 		StatusEffectLibrary:AddPriorityCallback(callback, priority, func, arg)
 		if not StatusEffectLibrary.AddedCallbacks[callback] then
