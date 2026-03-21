@@ -78,7 +78,7 @@ local function InitMod()
 	---@type {[string]: StatusConfig}
 	StatusEffectLibrary.StatusConfig = CACHED_CONFIG or {}
 
-		---@type table<ModCallbacks, function[]>
+	---@type table<ModCallbacks, function[]>
 	StatusEffectLibrary.AddedCallbacks = {} -- for any vanilla callback functions added by this library
 	StatusEffectLibrary.Callbacks = {}
 	---@type table<string, StatusCallback[]>
