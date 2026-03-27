@@ -1,6 +1,6 @@
 local Mod = SELExample
 
-local VERSION = 1.12 --1.1.2
+local VERSION = 1.13 --1.1.3
 local game = Game()
 local floor = math.floor
 local min = math.min
@@ -743,7 +743,7 @@ local function InitFunctions()
 		end
 		if ent:HasEntityFlags(EntityFlag.FLAG_NO_STATUS_EFFECTS)
 			or (ent:ToNPC() and not ent:IsActiveEnemy(false))
-			or (ent:ToNPC() and not ent:ToNPC().CanShutDoors)
+			or (ent:ToNPC() and not ent:IsInvincible())
 		then
 			return false
 		end
@@ -860,7 +860,12 @@ local function InitFunctions()
 			renderPos = Isaac.WorldToRenderPosition(ent.Position + ent.PositionOffset) + offset
 		end
 		if REPENTOGON and not ent:ToPlayer() then
-			local statusOffset = ent:GetNullOffset("OverlayEffect")
+			local sprite = ent:GetSprite()
+			local nullFrame = sprite:GetNullFrame("OverlayEffect")
+			if not nullFrame or not nullFrame:IsVisible() then
+				return
+			end
+			local statusOffset = nullFrame ~= nil and nullFrame:GetPos() or Vector.Zero
 			renderPos = renderPos + (isReflection and -statusOffset or statusOffset)
 		else
 			renderPos = renderPos - (isReflection and Vector(0, -35) or Vector(0, 35))
