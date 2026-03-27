@@ -743,7 +743,7 @@ local function InitFunctions()
 		end
 		if ent:HasEntityFlags(EntityFlag.FLAG_NO_STATUS_EFFECTS)
 			or (ent:ToNPC() and not ent:IsActiveEnemy(false))
-			or (ent:ToNPC() and not ent:IsInvincible())
+			or (ent:ToNPC() and ent:IsInvincible())
 		then
 			return false
 		end
