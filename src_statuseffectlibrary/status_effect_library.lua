@@ -860,12 +860,7 @@ local function InitFunctions()
 			renderPos = Isaac.WorldToRenderPosition(ent.Position + ent.PositionOffset) + offset
 		end
 		if REPENTOGON and not ent:ToPlayer() then
-			local sprite = ent:GetSprite()
-			local nullFrame = sprite:GetNullFrame("OverlayEffect")
-			if not nullFrame or not nullFrame:IsVisible() then
-				return
-			end
-			local statusOffset = nullFrame ~= nil and nullFrame:GetPos() or Vector.Zero
+			local statusOffset = ent:GetNullOffset("OverlayEffect")
 			renderPos = renderPos + (isReflection and -statusOffset or statusOffset)
 		else
 			renderPos = renderPos - (isReflection and Vector(0, -35) or Vector(0, 35))
