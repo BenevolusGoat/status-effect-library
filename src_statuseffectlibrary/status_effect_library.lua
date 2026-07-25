@@ -819,7 +819,7 @@ local function InitFunctions()
 				allStatusEffects = allStatusEffects | bitmask
 			end
 		end
-		return StatusEffectLibrary.HasAnyBitFlags(curStatusEffects, allStatusEffects)
+		return StatusEffectLibrary.Utils.HasAnyBitFlags(curStatusEffects, allStatusEffects)
 	end
 
 	--#endregion
