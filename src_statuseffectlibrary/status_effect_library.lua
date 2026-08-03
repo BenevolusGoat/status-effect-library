@@ -1,6 +1,6 @@
 local Mod = SELExample
 
-local VERSION = 1.14 --1.1.4
+local VERSION = 1.13 --1.1.3
 local game = Game()
 local floor = math.floor
 local min = math.min
@@ -592,7 +592,7 @@ local function InitFunctions()
 		end
 
 		local durationMult = StatusEffectLibrary.Utils.GetSecondHandMultiplier()
-		duration = floor(duration * durationMult)
+		local newDuration = floor(duration * durationMult)
 
 		statusEffects.Flags = statusEffects.Flags | StatusEffectLibrary.StatusFlag[identifier]
 		statusEffects.NumStatusesActive = statusEffects.NumStatusesActive + 1
@@ -600,15 +600,15 @@ local function InitFunctions()
 		local statusEffectData = statusEffects.StatusEffectData[identifier]
 		if not statusEffectData then
 			statusEffects.StatusEffectData[identifier] = {
-				Countdown = floor(duration),
+				Countdown = floor(newDuration),
 				Source = source,
 				CustomData = customData
 			}
 			statusEffectData = statusEffects.StatusEffectData[identifier]
-			StatusEffectLibrary.Utils.DebugLog(identifier, "Initialized status effect data with duration of", duration, "for", ent.Type, ent.Variant)
+			StatusEffectLibrary.Utils.DebugLog(identifier, "Initialized status effect data with duration of", newDuration, "for", ent.Type, ent.Variant)
 		else
-			statusEffectData.Countdown = floor(duration)
-			StatusEffectLibrary.Utils.DebugLog(identifier, "Status effect already present. Resetting duration to", duration, "for", ent.Type, ent.Variant)
+			statusEffectData.Countdown = floor(newDuration)
+			StatusEffectLibrary.Utils.DebugLog(identifier, "Status effect already present. Resetting duration to", newDuration, "for", ent.Type, ent.Variant)
 			return true
 		end
 
@@ -622,31 +622,33 @@ local function InitFunctions()
 			local children = {}
 			local currentEnt, isLooped = StatusEffectLibrary.Utils.GetLastParent(npc)
 			statusEffects.LoopedChain = isLooped
-			tempBlacklist[entHash] = true
+			local loopEntHash = entHash
+			tempBlacklist[loopEntHash] = true
 
 			--Apply to rest of chain
 			while currentEnt.Child and currentEnt.Child:ToNPC()
 				and StatusEffectLibrary.Utils.IsInParentChildChain(currentEnt.Child)
-				and not children[entHash]
+				and not children[loopEntHash]
 			do
 				StatusEffectLibrary.Utils.DebugLog(identifier, "Jumped to child", currentEnt.Child:ToNPC().Type, currentEnt.Child:ToNPC().Variant, "from", currentEnt.Type, currentEnt.Variant)
-				children[entHash] = true
+				children[loopEntHash] = true
 				applyNonLoopingStatus(currentEnt, statusFlag, duration, source, color, StatusEffectLibrary.Utils.DeepCopy(customData), isLooped)
 				local child = currentEnt.Child:ToNPC()
 				---@cast child EntityNPC
 				currentEnt = child
-				entHash = GetPtrHash(currentEnt)
+				loopEntHash = GetPtrHash(currentEnt)
 			end
 
 			--Apply to end of chain
 			if currentEnt.Parent
 				and currentEnt.Parent:ToNPC()
 				and StatusEffectLibrary.Utils.IsInParentChildChain(currentEnt)
-				and not children[entHash]
+				and not children[loopEntHash]
 			then
 				StatusEffectLibrary.Utils.DebugLog(identifier, "Applied to end of chain", currentEnt.Type, currentEnt.Variant)
 				applyNonLoopingStatus(currentEnt, statusFlag, duration, source, color, StatusEffectLibrary.Utils.DeepCopy(customData), isLooped)
 			end
+			tempBlacklist[entHash] = nil
 		end
 
 		if ent:IsBoss() and not statusConfig.CustomTargetCheck and ent.Type ~= EntityType.ENTITY_DUMMY then
@@ -742,8 +744,10 @@ local function InitFunctions()
 			return true
 		end
 		if ent:HasEntityFlags(EntityFlag.FLAG_NO_STATUS_EFFECTS)
-			or (ent:ToNPC() and not ent:IsActiveEnemy(false))
-			or (ent:ToNPC() and ent:IsInvincible())
+			or ent:ToNPC() and (
+				not ent:IsActiveEnemy(false)
+				or ent:IsInvincible()
+			)
 		then
 			return false
 		end
@@ -777,26 +781,27 @@ local function InitFunctions()
 		statusEffectData.Countdown = floor(countdown)
 	end
 
+	local REGULAR_STATUSES = EntityFlag.FLAG_FREEZE
+		| EntityFlag.FLAG_MIDAS_FREEZE
+		| EntityFlag.FLAG_SHRINK
+		| EntityFlag.FLAG_ICE
+	local ICON_STATUSES = EntityFlag.FLAG_POISON
+		| EntityFlag.FLAG_SLOW
+		| EntityFlag.FLAG_CHARM
+		| EntityFlag.FLAG_CONFUSION
+		| EntityFlag.FLAG_FEAR
+		| EntityFlag.FLAG_BLEED_OUT
+		| EntityFlag.FLAG_MAGNETIZED
+		| EntityFlag.FLAG_BAITED
+		| EntityFlag.FLAG_WEAKNESS
+		| EntityFlag.FLAG_BRIMSTONE_MARKED
+		| EntityFlag.FLAG_BURN
+
 	---@param ent Entity
 	---@param onlyIcon? boolean @Set to true to only detect status effects with an associated sprite
 	---@param bypassIgnore? boolean @Check if you have any vanilla effects at all, bypassing custom status effects that ignore certain statuses
 	function StatusEffectLibrary:HasAnyVanillaStatusEffect(ent, onlyIcon, bypassIgnore)
-		local regularStatus = EntityFlag.FLAG_FREEZE
-			| EntityFlag.FLAG_MIDAS_FREEZE
-			| EntityFlag.FLAG_SHRINK
-			| EntityFlag.FLAG_ICE
-		local iconStatus = EntityFlag.FLAG_POISON
-			| EntityFlag.FLAG_SLOW
-			| EntityFlag.FLAG_CHARM
-			| EntityFlag.FLAG_CONFUSION
-			| EntityFlag.FLAG_FEAR
-			| EntityFlag.FLAG_BLEED_OUT
-			| EntityFlag.FLAG_MAGNETIZED
-			| EntityFlag.FLAG_BAITED
-			| EntityFlag.FLAG_WEAKNESS
-			| EntityFlag.FLAG_BRIMSTONE_MARKED
-			| EntityFlag.FLAG_BURN
-		local vanillaEffects = onlyIcon and iconStatus or (regularStatus | iconStatus)
+		local vanillaEffects = onlyIcon and ICON_STATUSES or (REGULAR_STATUSES | ICON_STATUSES)
 		local customEffects = StatusEffectLibrary:GetStatusEffects(ent)
 		if customEffects and bypassIgnore then
 			for _, flag in ipairs(StatusEffectLibrary.StatusFlag) do
@@ -819,7 +824,7 @@ local function InitFunctions()
 				allStatusEffects = allStatusEffects | bitmask
 			end
 		end
-		return StatusEffectLibrary.Utils.HasAnyBitFlags(curStatusEffects, allStatusEffects)
+		return StatusEffectLibrary.HasAnyBitFlags(curStatusEffects, allStatusEffects)
 	end
 
 	--#endregion
@@ -860,7 +865,12 @@ local function InitFunctions()
 			renderPos = Isaac.WorldToRenderPosition(ent.Position + ent.PositionOffset) + offset
 		end
 		if REPENTOGON and not ent:ToPlayer() then
-			local statusOffset = ent:GetNullOffset("OverlayEffect")
+			local sprite = ent:GetSprite()
+			local nullFrame = sprite:GetNullFrame("OverlayEffect")
+			if not nullFrame or not nullFrame:IsVisible() then
+				return
+			end
+			local statusOffset = nullFrame ~= nil and nullFrame:GetPos() or Vector.Zero
 			renderPos = renderPos + (isReflection and -statusOffset or statusOffset)
 		else
 			renderPos = renderPos - (isReflection and Vector(0, -35) or Vector(0, 35))
